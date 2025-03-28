@@ -8,6 +8,7 @@ const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const rateLimit = require("express-rate-limit");
 const fs = require("fs");
+const { Voice, VoiceSettings, Category, Model } = require("@elevenlabs/node");
 
 // Initialize Express first
 const app = express();
@@ -63,31 +64,83 @@ if (!fs.existsSync(tmpDir)) {
   fs.mkdirSync(tmpDir, { recursive: true });
   console.log("Created tmp directory");
 }
+
+// voiceover function
+
+async function generateVoiceover(text) {
+  try {
+    const voice = new Voice({
+      apiKey: process.env.ELEVENLABS_API_KEY,
+      voiceId: "21m00Tcm4TlvDq8ikWAM", // Default voice ID (you can change this)
+      settings: new VoiceSettings({
+        stability: 0.5,
+        similarity_boost: 0.75,
+      }),
+    });
+
+    const audioBuffer = await voice.textToSpeech(text);
+
+    // Generate unique filename
+    const fileName = `voiceover-${Date.now()}.mp3`;
+    const filePath = path.join(__dirname, "tmp", fileName);
+
+    // Save audio file
+    fs.writeFileSync(filePath, audioBuffer);
+
+    return fileName;
+  } catch (error) {
+    console.error("Voiceover generation error:", error);
+    throw new Error("Failed to generate voiceover");
+  }
+}
+
 // Helper Functions
 async function processContent(text) {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Changed to cheaper model
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content:
-            "Convert educational content into engaging, bite-sized summaries. Format: Title, Key Points, Fun Fact. Keep it concise and engaging for Gen-Z audience.",
+          content: `You are an engaging teacher who explains complex topics in simple terms.
+          Your response MUST be valid JSON in this exact format (no other text allowed):
+          {
+            "title": "Topic Title 📚",
+            "intro": "One-line introduction to the concept",
+            "simpleExplanation": "Explain the concept like you're talking to a beginner. Use simple analogies and everyday examples. Keep it under 3 sentences.",
+            "funExample": "A real-world example or fun fact that makes this concept memorable",
+            "voiceoverScript": "A conversational version of the explanation for text-to-speech"
+          }`,
         },
         {
           role: "user",
           content: text,
         },
       ],
-      max_tokens: 150,
+      max_tokens: 400,
       temperature: 0.7,
     });
-    return response.choices[0].message.content;
+
+    const content = JSON.parse(response.choices[0].message.content);
+
+    // Generate voiceover for the script
+    const voiceoverFile = await generateVoiceover(content.voiceoverScript);
+
+    return {
+      title: content.title,
+      intro: content.intro,
+      simpleExplanation: content.simpleExplanation,
+      funExample: content.funExample,
+      voiceover: voiceoverFile,
+    };
   } catch (error) {
-    console.error("OpenAI API error:", error);
-    throw new Error("Failed to process content with AI");
+    console.error("Content processing error:", error);
+    throw error;
   }
 }
+
+// Update the generateReels function's mapping to include more metadata
+
 // Update the generateReels function
 async function generateReels(file) {
   try {
@@ -98,13 +151,9 @@ async function generateReels(file) {
     // Handle PDF files
     if (fileExt === ".pdf") {
       try {
-        // Read from temp file instead of buffer
         const pdfBuffer = fs.readFileSync(file.tempFilePath);
         const data = await pdfParse(pdfBuffer);
         text = data.text;
-
-        // Clean up temp file
-        fs.unlinkSync(file.tempFilePath);
       } catch (pdfError) {
         console.error("PDF parsing error:", pdfError);
         throw new Error(
@@ -141,17 +190,22 @@ async function generateReels(file) {
 
     console.log(`Generated ${chunks.length} chunks from file`);
 
-    const reels = await Promise.all(
-      chunks.map(async (chunk, index) => {
-        const summary = await processContent(chunk);
-        return {
-          id: index + 1,
-          title: `Part ${index + 1}`,
-          description: summary,
-          originalContent: chunk.substring(0, 200) + "...",
-        };
-      })
-    );
+    // Process chunks sequentially
+    const reels = [];
+    for (let index = 0; index < chunks.length; index++) {
+      console.log(`Processing chunk ${index + 1}...`);
+      const chunk = chunks[index];
+      const summary = await processContent(chunk);
+      // Inside generateReels function, update the reels.push() call:
+      reels.push({
+        id: index + 1,
+        title: `Part ${index + 1}`,
+        description: summary.simpleExplanation,
+        originalContent: chunk.substring(0, 200) + "...",
+        voiceoverUrl: `/api/voiceover/${summary.voiceover}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return reels;
   } catch (error) {
@@ -219,6 +273,15 @@ app.post("/api/upload", async (req, res) => {
 
 // Error handling middleware
 // Add before server.listen()
+// Add this route before app.listen()
+app.get("/api/voiceover/:filename", (req, res) => {
+  const filePath = path.join(__dirname, "tmp", req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: "Voiceover file not found" });
+  }
+});
 
 // Error handling middleware (keep at the bottom)
 app.use((err, req, res, next) => {
