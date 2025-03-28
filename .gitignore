@@ -65,3 +65,8 @@ out/
 
 # Cache
 .cache/
+
+# Add these lines
+/server/tmp
+/tmp
+*.tmp

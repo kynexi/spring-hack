@@ -1,41 +1,55 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
-
-// ...existing imports...
+import { motion, AnimatePresence } from "framer-motion";
+import { CloudArrowUpIcon } from "@heroicons/react/24/outline";
 
 function Upload({ onUploadComplete }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const ALLOWED_TYPES = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+  ];
 
   const handleFileSelect = async (file) => {
     try {
+      if (!file) return;
+
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        throw new Error("Please upload a PDF or Word document");
+      }
+
       setIsLoading(true);
       setError(null);
+      setUploadProgress(0);
 
       const formData = new FormData();
       formData.append("file", file);
 
-      console.log("Uploading file:", file.name); // Debug log
-
       const response = await fetch("http://localhost:5001/api/upload", {
         method: "POST",
         body: formData,
+        headers: {
+          Accept: "application/json",
+        },
+        // Remove Content-Type header - let browser set it with boundary
+        credentials: "include",
       });
 
-      console.log("Response status:", response.status); // Debug log
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Upload failed");
+      }
 
       const data = await response.json();
-      console.log("Response data:", data); // Debug log
-
-      if (!response.ok) {
-        throw new Error(data.error || "Upload failed");
-      }
 
       if (data.slides && data.slides.length > 0) {
         onUploadComplete(data.slides);
       } else {
-        throw new Error("No slides received");
+        throw new Error("No content could be extracted from file");
       }
     } catch (error) {
       console.error("Upload error:", error);
@@ -52,7 +66,7 @@ function Upload({ onUploadComplete }) {
           isDragging
             ? "border-blue-500 bg-blue-500/10"
             : "border-gray-600 bg-gray-800/50"
-        } border-2 border-dashed backdrop-blur-sm`}
+        } border-2 border-dashed backdrop-blur-sm transition-colors duration-200`}
         animate={{ scale: isDragging ? 1.02 : 1 }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -65,47 +79,77 @@ function Upload({ onUploadComplete }) {
           handleFileSelect(e.dataTransfer.files[0]);
         }}
       >
-        {isLoading ? (
-          <div className="text-center">
+        <AnimatePresence mode="wait">
+          {error && (
             <motion.div
-              className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
-            <p className="text-white text-lg">Processing your content...</p>
-          </div>
-        ) : (
-          <>
-            <input
-              type="file"
-              className="hidden"
-              id="fileInput"
-              onChange={(e) => handleFileSelect(e.target.files[0])}
-              accept=".pdf,.ppt,.pptx"
-            />
-            <label
-              htmlFor="fileInput"
-              className="block text-center cursor-pointer"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="bg-red-500/10 border border-red-500 rounded-lg p-4 mb-6 text-red-500 text-center"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          {isLoading ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-center"
             >
               <motion.div
-                className="w-20 h-20 mx-auto mb-4 text-blue-500"
-                whileHover={{ scale: 1.1 }}
+                className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              />
+              <p className="text-white text-lg mb-2">
+                Processing your content...
+              </p>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <motion.div
+                  className="bg-blue-500 h-2 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <input
+                type="file"
+                className="hidden"
+                id="fileInput"
+                onChange={(e) => handleFileSelect(e.target.files[0])}
+                accept=".pdf,.doc,.docx"
+              />
+              <label
+                htmlFor="fileInput"
+                className="block text-center cursor-pointer group"
               >
-                {/* Add an upload icon here */}
-                📤
-              </motion.div>
-              <h3 className="text-white text-xl font-bold mb-2">
-                Upload Your Content
-              </h3>
-              <p className="text-gray-400">
-                Drop your slides here or click to browse
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                Supports PDF, PPT, PPTX
-              </p>
-            </label>
-          </>
-        )}
+                <motion.div
+                  className="w-20 h-20 mx-auto mb-4 text-blue-500 flex items-center justify-center"
+                  whileHover={{ scale: 1.1 }}
+                >
+                  <CloudArrowUpIcon className="w-16 h-16 group-hover:text-blue-400 transition-colors" />
+                </motion.div>
+                <h3 className="text-white text-xl font-bold mb-2">
+                  Upload Your Content
+                </h3>
+                <p className="text-gray-400 mb-2">
+                  Drop your document here or click to browse
+                </p>
+                <p className="text-gray-500 text-sm">
+                  Supports PDF and Word documents (max 50MB)
+                </p>
+              </label>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
