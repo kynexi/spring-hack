@@ -35,7 +35,6 @@ function Upload({ onUploadComplete }) {
         headers: {
           Accept: "application/json",
         },
-        // Remove Content-Type header - let browser set it with boundary
         credentials: "include",
       });
 

@@ -1,36 +1,81 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import Subtitles from "./Subtitles";
 
 function Reel({ content, index, onNext, videoSrc }) {
+  const audioRef = useRef(null);
   const videoRef = useRef(null);
-  const [progress, setProgress] = useState(0); // State to track video progress
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+
+  const togglePlayback = async () => {
+    if (!audioRef.current || !isAudioLoaded) return;
+
+    try {
+      if (isPlaying) {
+        await audioRef.current.pause();
+      } else {
+        await audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    } catch (error) {
+      console.error("Playback toggle failed:", error);
+    }
+  };
 
   useEffect(() => {
-    const video = videoRef.current;
+    // Initialize audio element
+    if (content.voiceoverUrl && !audioRef.current) {
+      audioRef.current = new Audio(
+        `http://localhost:5001${content.voiceoverUrl}`
+      );
 
-    const handleTimeUpdate = () => {
-      if (video) {
-        const currentTime = video.currentTime;
-        const duration = video.duration || 1; // Avoid division by zero
-        setProgress((currentTime / duration) * 100); // Calculate progress percentage
-      }
-    };
-
-    if (video) {
-      video.currentTime = 0; // Reset video to the beginning
-      video.play().catch((error) => {
-        console.warn("Video playback interrupted:", error);
+      // Add event listeners
+      audioRef.current.addEventListener("loadeddata", () => {
+        setIsAudioLoaded(true);
+        // Autoplay once loaded
+        audioRef.current.play().catch((error) => {
+          console.error("Autoplay failed:", error);
+        });
       });
-      video.addEventListener("timeupdate", handleTimeUpdate); // Listen for time updates
-    }
 
-    return () => {
-      if (video) {
-        video.pause();
-        video.removeEventListener("timeupdate", handleTimeUpdate); // Cleanup event listener
-      }
-    };
-  }, [index]);
+      audioRef.current.addEventListener("play", () => setIsPlaying(true));
+      audioRef.current.addEventListener("pause", () => setIsPlaying(false));
+      audioRef.current.addEventListener("ended", () => {
+        setIsPlaying(false);
+        onNext();
+      });
+      audioRef.current.addEventListener("timeupdate", () => {
+        setCurrentTime(audioRef.current.currentTime);
+      });
+
+      // Space key handler
+      const handleKeyPress = (e) => {
+        if (e.code === "Space") {
+          e.preventDefault();
+          togglePlayback();
+        }
+      };
+      window.addEventListener("keydown", handleKeyPress);
+
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.removeEventListener("loadeddata", () => {});
+          audioRef.current.removeEventListener("play", () => {});
+          audioRef.current.removeEventListener("pause", () => {});
+          audioRef.current.removeEventListener("ended", () => {});
+          audioRef.current.removeEventListener("timeupdate", () => {});
+          audioRef.current = null;
+        }
+        window.removeEventListener("keydown", handleKeyPress);
+        setIsAudioLoaded(false);
+      };
+    }
+  }, [content.voiceoverUrl, onNext]);
+
+  const voiceoverText = `${content.simpleExplanation} Here's a fun example: ${content.funExample}`;
 
   return (
     <motion.div
@@ -38,6 +83,7 @@ function Reel({ content, index, onNext, videoSrc }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={togglePlayback}
     >
       {/* Video background */}
       <video
@@ -47,58 +93,40 @@ function Reel({ content, index, onNext, videoSrc }) {
         autoPlay
         muted
         loop
-        style={{
-          width: "720px",
-          height: "1280px",
-          objectFit: "cover",
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-        }}
+        playsInline
       />
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-900/50 to-black" />
-
       {/* Content */}
-      <div className="relative z-10 max-w-md text-center px-6">
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h2 className="text-3xl font-bold text-white mb-4">
+      <div className="absolute top-[70%] left-0 right-0 z-10 px-6">
+        <div className="max-w-md mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-4 text-shadow-lg">
             {content.title}
           </h2>
-          <p className="text-lg text-gray-200">{content.description}</p>
-
-          <div className="mt-8 flex justify-center gap-4">
-            <button
-              className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-              onClick={onNext}
-            >
-              Next
-            </button>
-          </div>
-        </motion.div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onNext();
+            }}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+          >
+            Next
+          </button>
+        </div>
       </div>
 
-      {/* Slide number */}
-      <div className="absolute bottom-8 right-8 text-white text-xl">
-        {index + 1}
+      {/* Click/Space instructions */}
+      <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 text-white/50 text-sm z-20">
+        Press <span className="px-2 py-1 bg-white/10 rounded">space</span> or
+        click anywhere to {isPlaying ? "pause" : "play"}
       </div>
 
-      {/* Progress bar */}
-      <div className="absolute bottom-0 left-0 w-full h-2 bg-gray-700">
-        <motion.div
-          className="h-2 bg-blue-500"
-          style={{ width: `${progress}%` }}
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.1 }}
-        />
-      </div>
+      {/* Subtitles */}
+      <Subtitles
+        text={voiceoverText}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        audioRef={audioRef}
+      />
     </motion.div>
   );
 }

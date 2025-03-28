@@ -8,7 +8,11 @@ const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const rateLimit = require("express-rate-limit");
 const fs = require("fs");
-const { Voice, VoiceSettings, Category, Model } = require("@elevenlabs/node");
+const { ElevenLabsClient } = require("elevenlabs");
+const elevenlabs = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY, // Ensure your API key is set in the .env file
+});
+const MAX_CHUNKS = process.env.MAX_CHUNKS || 1;
 
 // Initialize Express first
 const app = express();
@@ -69,31 +73,48 @@ if (!fs.existsSync(tmpDir)) {
 
 async function generateVoiceover(text) {
   try {
-    const voice = new Voice({
-      apiKey: process.env.ELEVENLABS_API_KEY,
-      voiceId: "21m00Tcm4TlvDq8ikWAM", // Default voice ID (you can change this)
-      settings: new VoiceSettings({
-        stability: 0.5,
-        similarity_boost: 0.75,
-      }),
+    console.log("Generating voiceover for text:", text);
+    // Call ElevenLabs text-to-speech API
+    const audioStream = await elevenlabs.generate({
+      voice: "pFZP5JQG7iQjIQuC4Bku", // Replace with your desired voice ID
+      text, // Use the exact text passed to the function
+      model_id: "eleven_monolingual_v1", // Use a cheaper model
+      stability: 0.5,
+      similarity_boost: 0.75,
     });
 
-    const audioBuffer = await voice.textToSpeech(text);
-
-    // Generate unique filename
+    // Generate a unique filename for the audio file
     const fileName = `voiceover-${Date.now()}.mp3`;
     const filePath = path.join(__dirname, "tmp", fileName);
 
-    // Save audio file
-    fs.writeFileSync(filePath, audioBuffer);
+    // Save the audio stream to a file
+    const writeStream = fs.createWriteStream(filePath);
+    audioStream.pipe(writeStream);
 
-    return fileName;
+    // Return a promise that resolves when the file is fully written
+    return new Promise((resolve, reject) => {
+      writeStream.on("finish", () => resolve(fileName));
+      writeStream.on("error", reject);
+    });
   } catch (error) {
     console.error("Voiceover generation error:", error);
     throw new Error("Failed to generate voiceover");
   }
 }
 
+async function listVoices() {
+  try {
+    const voices = await elevenlabs.voices.getAll();
+    console.log("Available voices:", voices);
+  } catch (error) {
+    console.error("Error fetching voices:", error);
+  }
+}
+
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir, { recursive: true });
+  console.log("Created tmp directory");
+}
 // Helper Functions
 async function processContent(text) {
   try {
@@ -108,8 +129,7 @@ async function processContent(text) {
             "title": "Topic Title 📚",
             "intro": "One-line introduction to the concept",
             "simpleExplanation": "Explain the concept like you're talking to a beginner. Use simple analogies and everyday examples. Keep it under 3 sentences.",
-            "funExample": "A real-world example or fun fact that makes this concept memorable",
-            "voiceoverScript": "A conversational version of the explanation for text-to-speech"
+            "funExample": "A real-world example or fun fact that makes this concept memorable"
           }`,
         },
         {
@@ -121,10 +141,26 @@ async function processContent(text) {
       temperature: 0.7,
     });
 
+    console.log("GPT Response:", response.choices[0].message.content);
+
+    // Parse the GPT response
     const content = JSON.parse(response.choices[0].message.content);
 
+    // Validate the JSON structure
+    if (
+      !content.title ||
+      !content.intro ||
+      !content.simpleExplanation ||
+      !content.funExample
+    ) {
+      throw new Error("Invalid GPT response format");
+    }
+
+    // Combine simpleExplanation and funExample for the voiceover script
+    const voiceoverScript = `${content.simpleExplanation} Here's a fun example: ${content.funExample}`;
+
     // Generate voiceover for the script
-    const voiceoverFile = await generateVoiceover(content.voiceoverScript);
+    const voiceoverFile = await generateVoiceover(voiceoverScript);
 
     return {
       title: content.title,
@@ -182,26 +218,27 @@ async function generateReels(file) {
       throw new Error("No text content found in the file");
     }
 
-    // Split into chunks and process
+    // Split into chunks and process only the first chunk
     const chunks = text
       .split(/\n\n+/)
       .filter((chunk) => chunk.trim().length > 50)
-      .slice(0, 10);
+      .slice(0, MAX_CHUNKS);
 
-    console.log(`Generated ${chunks.length} chunks from file`);
+    console.log(`Generated ${chunks.length} chunk(s) from file`);
 
-    // Process chunks sequentially
+    // Process the first chunk
     const reels = [];
     for (let index = 0; index < chunks.length; index++) {
       console.log(`Processing chunk ${index + 1}...`);
       const chunk = chunks[index];
       const summary = await processContent(chunk);
-      // Inside generateReels function, update the reels.push() call:
       reels.push({
         id: index + 1,
-        title: `Part ${index + 1}`,
-        description: summary.simpleExplanation,
-        originalContent: chunk.substring(0, 200) + "...",
+        title: summary.title,
+        intro: summary.intro,
+        simpleExplanation: summary.simpleExplanation,
+        funExample: summary.funExample,
+        description: summary.intro, // Add this line
         voiceoverUrl: `/api/voiceover/${summary.voiceover}`,
         timestamp: new Date().toISOString(),
       });
