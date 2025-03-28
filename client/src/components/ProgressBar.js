@@ -3,10 +3,10 @@ import { motion } from "framer-motion";
 
 function ProgressBar({ progress }) {
   return (
-    <div className="fixed top-16 left-0 w-full z-40 px-4 py-2">
-      <div className="w-full bg-gray-700 rounded-full h-2">
+    <div className="fixed top-[56px] left-1/2 transform -translate-x-1/2 z-40" style={{ width: "calc(100% - 2rem)" }}> 
+      <div className="w-full bg-gray-700 h-[2px]">
         <motion.div
-          className="bg-blue-500 h-2 rounded-full"
+          className="bg-blue-500 h-[2px]"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5 }}
