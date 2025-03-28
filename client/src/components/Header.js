@@ -15,14 +15,6 @@ function Header() {
         >
           Scroll2Learn
         </motion.h1>
-        <nav className="flex gap-4">
-          <button className="text-white hover:text-blue-400 transition-colors">
-            Help
-          </button>
-          <button className="text-white hover:text-blue-400 transition-colors">
-            Profile
-          </button>
-        </nav>
       </div>
     </motion.header>
   );
