@@ -71,7 +71,4 @@ out/
 /tmp
 *.tmp
 
-client/public/video1.mp4
-client/public/video2.mp4
-client/public/video3.mp4
 client/public/videos/
