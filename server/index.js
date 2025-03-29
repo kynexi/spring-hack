@@ -12,7 +12,7 @@ const { ElevenLabsClient } = require("elevenlabs");
 const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY, // Ensure your API key is set in the .env file
 });
-const MAX_CHUNKS = process.env.MAX_CHUNKS || 3;
+const MAX_CHUNKS = process.env.MAX_CHUNKS || 8;
 
 // Initialize Express first
 const app = express();
@@ -176,7 +176,47 @@ async function processContent(text) {
 }
 
 // Update the generateReels function's mapping to include more metadata
+async function generateQuiz(reels) {
+  try {
+    const context = reels
+      .map(
+        (reel) => `${reel.title}: ${reel.simpleExplanation} ${reel.funExample}`
+      )
+      .join("\n");
 
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: `Generate a multiple choice quiz question based on the provided learning content. 
+          Your response MUST be valid JSON in this format (no other text):
+          {
+            "question": "The quiz question",
+            "options": ["Option A", "Option B", "Option C", "Option D"],
+            "correctAnswer": 0,
+            "explanation": "Brief explanation of why this is correct"
+          }
+          The correctAnswer should be the index (0-3) of the correct option.
+          Make the question engaging and clearly related to the content.
+          Make wrong options plausible but clearly incorrect.`,
+        },
+        {
+          role: "user",
+          content: context,
+        },
+      ],
+      max_tokens: 400,
+      temperature: 0.7,
+    });
+
+    const quizContent = JSON.parse(response.choices[0].message.content);
+    return quizContent;
+  } catch (error) {
+    console.error("Quiz generation error:", error);
+    throw error;
+  }
+}
 // Update the generateReels function
 async function generateReels(file) {
   try {
@@ -232,16 +272,29 @@ async function generateReels(file) {
       console.log(`Processing chunk ${index + 1}...`);
       const chunk = chunks[index];
       const summary = await processContent(chunk);
+
       reels.push({
         id: index + 1,
+        type: "content",
         title: summary.title,
         intro: summary.intro,
         simpleExplanation: summary.simpleExplanation,
         funExample: summary.funExample,
-        description: summary.intro, // Add this line
+        description: summary.intro,
         voiceoverUrl: `/api/voiceover/${summary.voiceover}`,
         timestamp: new Date().toISOString(),
       });
+
+      // Add a quiz after every 3 reels
+      if ((index + 1) % 3 === 0 && index > 0) {
+        const quiz = await generateQuiz(reels.slice(-3));
+        reels.push({
+          id: `quiz-${Math.floor(index / 3)}`,
+          type: "quiz",
+          ...quiz,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     return reels;
