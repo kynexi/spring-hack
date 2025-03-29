@@ -12,7 +12,7 @@ const { ElevenLabsClient } = require("elevenlabs");
 const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY, // Ensure your API key is set in the .env file
 });
-const MAX_CHUNKS = process.env.MAX_CHUNKS || 1;
+const MAX_CHUNKS = process.env.MAX_CHUNKS || 3;
 
 // Initialize Express first
 const app = express();
