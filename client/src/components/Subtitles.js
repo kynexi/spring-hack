@@ -40,7 +40,7 @@ function Subtitles({ text, isPlaying, currentTime, audioRef }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.3 }}
-          className="fixed bottom-20 left-0 right-0 flex justify-center items-center w-full px-4"
+          className="fixed bottom-16 left-0 right-0 flex justify-center items-center w-full px-4 z-30"
         >
           <div className="bg-black bg-opacity-50 backdrop-blur-sm rounded-lg px-6 py-3 max-w-2xl mx-auto">
             <p className="text-white text-lg text-center leading-relaxed">

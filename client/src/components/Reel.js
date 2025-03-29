@@ -94,10 +94,11 @@ function Reel({ content, index, onNext, videoSrc }) {
         muted
         loop
         playsInline
+        onError={(e) => console.error("Video error:", e)} // Add error logging
       />
 
-      {/* Content */}
-      <div className="absolute top-[70%] left-0 right-0 z-10 px-6">
+      {/* Content - Moved up */}
+      <div className="absolute top-[60%] left-0 right-0 z-20 px-6">
         <div className="max-w-md mx-auto text-center">
           <h2 className="text-3xl font-bold text-white mb-4 text-shadow-lg">
             {content.title}
@@ -114,8 +115,8 @@ function Reel({ content, index, onNext, videoSrc }) {
         </div>
       </div>
 
-      {/* Click/Space instructions */}
-      <div className="absolute bottom-28 left-1/2 transform -translate-x-1/2 text-white/50 text-sm z-20">
+      {/* Space/Click instructions - Adjusted position */}
+      <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-white/50 text-sm z-20">
         Press <span className="px-2 py-1 bg-white/10 rounded">space</span> or
         click anywhere to {isPlaying ? "pause" : "play"}
       </div>
