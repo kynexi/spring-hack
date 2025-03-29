@@ -2,55 +2,65 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 function Subtitles({ text, isPlaying, currentTime, audioRef }) {
-  const [currentText, setCurrentText] = useState("");
-  const [words, setWords] = useState([]);
-  const [currentSentence, setCurrentSentence] = useState("");
+  const [currentPhrase, setCurrentPhrase] = useState("");
 
   useEffect(() => {
-    if (text) {
-      // Split text into sentences instead of words
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-      setWords(sentences);
-    }
-  }, [text]);
+    if (!text || !audioRef.current) return;
 
-  useEffect(() => {
-    if (!audioRef.current || !isPlaying) {
-      setCurrentText("");
-      setCurrentSentence("");
+    // Split into smaller, more digestible chunks (3-4 words each)
+    const phrases = text
+      .split(/[.!?]+/)
+      .flatMap((sentence) => {
+        const words = sentence.trim().split(" ");
+        const chunks = [];
+        for (let i = 0; i < words.length; i += 4) {
+          chunks.push(words.slice(i, i + 4).join(" "));
+        }
+        return chunks;
+      })
+      .filter((phrase) => phrase.length > 0);
+
+    if (!isPlaying) {
+      setCurrentPhrase("");
       return;
     }
 
-    // Calculate which sentence to show based on current time
-    const duration = audioRef.current.duration || 1;
-    const progress = currentTime / duration;
-    const sentenceIndex = Math.floor(progress * words.length);
+    // Calculate timing
+    const duration = audioRef.current.duration;
+    const timePerPhrase = duration / phrases.length;
+    const currentPhraseIndex = Math.floor(currentTime / timePerPhrase);
 
-    if (sentenceIndex < words.length) {
-      setCurrentSentence(words[sentenceIndex]);
+    if (currentPhraseIndex < phrases.length) {
+      setCurrentPhrase(phrases[currentPhraseIndex]);
     }
-  }, [isPlaying, currentTime, words, audioRef]);
+  }, [text, isPlaying, currentTime, audioRef]);
 
   return (
     <AnimatePresence mode="wait">
-      {isPlaying && (
+      {isPlaying && currentPhrase && (
         <motion.div
-          key={currentSentence}
+          key={currentPhrase}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3 }}
-          className="fixed bottom-16 left-0 right-0 flex justify-center items-center w-full px-4 z-30"
+          transition={{ duration: 0.2 }}
+          className="absolute bottom-20 left-0 right-0 flex justify-center items-center px-4 z-30"
         >
-          <div className="bg-black bg-opacity-50 backdrop-blur-sm rounded-lg px-6 py-3 max-w-2xl mx-auto">
-            <p className="text-white text-lg text-center leading-relaxed">
-              {currentSentence}
-            </p>
+          <div className="bg-black/40 backdrop-blur-sm rounded-xl px-8 py-4">
+            <motion.p
+              className="text-white text-4xl font-bold leading-tight tracking-wide text-center"
+              style={{
+                textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
+                maxWidth: "280px",
+                wordBreak: "break-word",
+              }}
+            >
+              {currentPhrase}
+            </motion.p>
           </div>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
-
 export default Subtitles;

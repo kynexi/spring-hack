@@ -8,9 +8,9 @@ function ReelFeed({ slides, onProgressUpdate }) {
 
   // Array of video file paths
   const videos = [
-    "/video1.mp4", // Ensure these files exist in the public folder
-    "/video1.mp4",
-    "/video1.mp4",
+    "/videos/video1.mp4", // Ensure these files exist in the public folder
+    "/videos/video1.mp4",
+    "/videos/video1.mp4",
   ];
 
   useEffect(() => {
