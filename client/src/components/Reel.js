@@ -13,29 +13,19 @@ function Reel({ content, index, onNext, videoSrc }) {
   const voiceoverText = `${content.simpleExplanation} Here's a fun example: ${content.funExample}`;
   const blurredVideoRef = useRef(null);
   const togglePlayback = async () => {
-    if (!audioRef.current || !isAudioLoaded) return;
-
     try {
       if (isPlaying) {
-        await audioRef.current.pause();
-        if (videoRef.current) {
-          videoRef.current.pause();
-        }
-        if (blurredVideoRef.current) {
-          blurredVideoRef.current.pause();
-        }
+        // Pause both video and audio
+        if (audioRef.current) await audioRef.current.pause();
+        if (videoRef.current) videoRef.current.pause();
         setIsPlaying(false);
       } else {
-        await audioRef.current.play();
+        // Play both video and audio
+        if (audioRef.current) await audioRef.current.play();
         if (videoRef.current) {
-          videoRef.current
-            .play()
-            .catch((e) => console.error("Video play failed:", e));
-        }
-        if (blurredVideoRef.current) {
-          blurredVideoRef.current
-            .play()
-            .catch((e) => console.error("Blurred video play failed:", e));
+          await videoRef.current.play().catch((e) => {
+            console.error("Video play failed:", e);
+          });
         }
         setIsPlaying(true);
       }
@@ -109,27 +99,20 @@ function Reel({ content, index, onNext, videoSrc }) {
 
   // Add video handling
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.onloadeddata = () => {
-        console.log("Video loaded successfully");
-        if (isPlaying) {
-          videoRef.current
-            .play()
-            .catch((e) => console.error("Video autoplay failed:", e));
-        } else {
-          videoRef.current.pause();
+    const handleKeyPress = (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+  
+        // Ensure video and audio elements are ready
+        if (videoRef.current && audioRef.current) {
+          togglePlayback();
         }
-      };
-
-      videoRef.current.onerror = (e) => {
-        console.error("Video loading error:", {
-          error: e,
-          src: videoSrc,
-          networkState: videoRef.current?.networkState,
-        });
-      };
-    }
-  }, [videoSrc, isPlaying]); // Add isPlaying as a dependency
+      }
+    };
+  
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [isPlaying]); // Add isPlaying as a dependency
 
   return (
     <motion.div
@@ -173,12 +156,27 @@ function Reel({ content, index, onNext, videoSrc }) {
 
         {/* Content - Moved up */}
         <div className="absolute top-8 left-0 right-0 z-20 px-6">
-          <div className="max-w-md mx-auto text-center">
-            <h2 className="text-3xl font-bold text-white mb-4 text-shadow-lg">
-              {content.title}
-            </h2>
-          </div>
-        </div>
+  <div className="max-w-md mx-auto text-center relative">
+    {/* Background for the title */}
+    <div
+      className="absolute inset-0 rounded-lg"
+      style={{
+        backgroundColor: "rgba(128, 0, 128, 0.7)", // Light purple background with transparency
+        zIndex: -1, // Position the background behind the text
+      }}
+    ></div>
+
+    {/* Title text */}
+    <h2
+      className="text-4xl font-extrabold text-white mb-4 relative"
+      style={{
+        textShadow: "4px 4px 8px rgba(0, 0, 0, 0.8)", // Add a strong shadow for contrast
+      }}
+    >
+      {content.title}
+    </h2>
+  </div>
+</div>
 
         {/* Space/Click instructions */}
         <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-white/50 text-sm z-20">

@@ -64,7 +64,7 @@ function ReelFeed({ slides, onProgressUpdate }) {
       </AnimatePresence>
 
       {/* Progress indicator */}
-      <div className="fixed right-4 top-1/2 transform -translate-y-1/2">
+      <div className="fixed right-4 top-1/2 transform -translate-y-1/2 z-[9999]">
         {slides.map((_, idx) => (
           <div
             key={idx}
